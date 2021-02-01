@@ -131,12 +131,9 @@ disp('--------------------------------------------------------------------')
 for iter = 1:params.Niter
   
     % -- Cut-off thresholds of residuals
-    aCT = params.alphCT(iter);
-    aCC = params.alphCC(iter);
-    wd0 = params.wd0(iter);
-    wd1 = params.wd1(iter);
-    
-    % -- Damping parameter
+    aCT  = params.alphCT(iter);
+    aCC  = params.alphCC(iter);
+    dmax = params.dmax(iter);
     lmbd = params.lmbd(iter);
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -211,8 +208,8 @@ for iter = 1:params.Niter
     vfCC(jScc) = params.vpvs;
 
     % -- Distance between events, and corresponding weights
-    wdCT = distanceWeightingHypoDD(mct,H,wd0,wd1);
-    wdCC = distanceWeightingHypoDD(mcc,H,wd0,wd1);
+    wdCT = distanceWeightingHypoDD(mct,H,dmax);
+    wdCC = distanceWeightingHypoDD(mcc,H,dmax);
     
     % -- Relative weighting of CT vs. CC  and P vs. S data
     WCT = wCT.*wdCT*params.wCT(iter);
