@@ -1,12 +1,8 @@
-function [hyp1,T1,stats] = hypoTD(hyp0,T0,sta,phadir,mcttd,mcctd,model,params)
-% function [hyp1,T1,stats] = hypoTD(hyp0,T0,sta,phadir,mct,mcc,model,params)
+function [hyp1,T1,stats] = hypoDD(hyp0,T0,sta,phadir,mct,mcc,model,params)
+% function [hyp1,T1,stats] = hypoDD(hyp0,T0,sta,phadir,mct,mcc,sP,model,params)
 %
-% 2020-01-15
-% This code was modifed from "hypoDD.m", which mimics the program hypoDD
-% by Felix Waldhauser. It uses triple-differences rather than
-% than double-differences, removing origin times from the system (they are
-% computed at the end).
-%
+% 2020-01-06
+% This code mimics "hypoDD" by Felix Waldhauser.
 % Some comments refer to Waldhauser and Ellsworth (2000,BSSA) as W2000
 %
 %   INPUTS 
@@ -15,10 +11,10 @@ function [hyp1,T1,stats] = hypoTD(hyp0,T0,sta,phadir,mcttd,mcctd,model,params)
 %       T0 = intial origin times (NEx1 datetime)
 %      sta = [latS,lonS,depS(km)]
 %   phadir = [EV,STA,PHA,T]
-%    mcttd = catalog differential times ((t1a-t1b)-(t2a-t2b))_obs
-%            [EVa,EVb,STA1,STA2,PHA,DDT,(CC)]
-%    mcctd = waveform differential times ((t1a-t1b)-(t2a-t2b))_obs
-%            [EVa,EVb,STA1,STA2,PHA,DDT,CC]
+%      mct = catalog differential times [EVa,EVb,STA,PHA,DT,(CC)]
+%            can be formed with "ph2dt.m"
+%      mcc = waveform differential times [EVa,EVb,STA,PHA,DT,CC]
+%            can be formed with "L1align" / "VCMC"
 %    model = N_layer x 2 matrix [Depth,Velocity]
 %   params = structure of optional paramters
 %
@@ -26,22 +22,22 @@ function [hyp1,T1,stats] = hypoTD(hyp0,T0,sta,phadir,mcttd,mcctd,model,params)
 %  OUTPUTS
 %
 %     hyp1 = [lat,lon,dep] estimated hypocenter (NEx3)
-%       T1 = estimated origin times (NEx1 datetime)
+%       T1 = estimated origin time (NEx1 datetime)
 %    stats = a dictionary with various output statistics
 
 
-if isempty(mcttd)
-    mcttd = zeros(0,7);
+if isempty(mct)
+    mct = zeros(0,6);
 end
-if isempty(mcctd)
-    mcctd = zeros(0,7);
+if isempty(mcc)
+    mcc = zeros(0,6);
 end
 
 Ne  = size(hyp0,1);
 Ns  = size(sta,1);
 Np  = size(phadir,1);
-Nct = size(mcttd,1);
-Ncc = size(mcctd,1);
+Nct = size(mct,1);
+Ncc = size(mcc,1);
 
 % -- Sort input/default parameters 
 params = unpack_paramsHypoDD(params);
@@ -51,10 +47,12 @@ MAD = 0.67449;
 
 % -- Initialize model vector with origin times just set to zero
 % -- Initialize vector of relocated events as full list
+T1 = T0;
 jE = (1:Ne)';
 
 % -- Prep interpolants of travel-time, take-off angle, source-velocity
 [Ft,Fg,Fv] = prep1DgridHypoDD(model,params.GXmax,params.GZmax);
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%   Set up map. NOTE: REQUIRES M_MAP PACKAGE    %%%%%%
@@ -93,7 +91,7 @@ stats.Ncc   = zeros(params.Niter,1);
 stats.DH    = zeros(params.Niter,1);
 stats.DZ    = zeros(params.Niter,1);
 stats.DT    = zeros(params.Niter,1);
-stats.OS    = zeros(params.Niter,3);
+stats.OS    = zeros(params.Niter,4);
 stats.prctM = zeros(params.Niter,1);
 stats.iter  = zeros(params.Niter,1);
 stats.jE    = cell(params.Niter,1);
@@ -103,13 +101,13 @@ stats.jE    = cell(params.Niter,1);
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 disp(' ')
-disp(['%%%%%%%%%%%%%%%   hypoTD starting ',datestr(datetime('now')),'   %%%%%%%%%%%%%%%'])
+disp(['%%%%%%%%%%%%%%%   hypoDD starting ',datestr(datetime('now')),'   %%%%%%%%%%%%%%%'])
 disp(['# earthquakes: ', num2str(Ne)])
 disp(['# stations: ', num2str(Ns)])
-disp(['# pick-based TDs: ',num2str(Nct)])
-disp(['# waveform-based TDs: ',num2str(Ncc)])
+disp(['# pick-based DDs: ',num2str(Nct)])
+disp(['# waveform-based DDs: ',num2str(Ncc)])
 disp(' ')
-disp('Iter     Ne   Nclst      Nct      Ncc    DH(km)  DZ(km)  %d_msft')
+disp('Iter     Ne   Nclst      Nct      Ncc    DH(km)  DZ(km)  DT(s)  %d_msft')
 disp('--------------------------------------------------------------------')
 
 %fprintf('% 3d  % 5d   % 7d  % 7d  % 6.3f  % 6.3f  % 6.3f  % 5.2f\n',  ... 
@@ -135,31 +133,28 @@ for iter = 1:params.Niter
     % -- Cluster events, ensuring continuous connection
     % -- Remove comparison for events in different clusters?
     % -- Unlike hypoDD, I do this separately for each iteration
-    [mcttd,mcctd,jE]   = checkMinStaHypoTD(mcttd,mcctd,jE,params.minsta,params.minstaPS);
-    [C,mcttd,mcctd,jE] = clusterHypoTD(mcttd,mcctd,jE,params.NobsC);
+    [mct,mcc,jE]   = checkMinStaHypoDD(mct,mcc,jE,params.minsta,params.minstaPS);
+    [C,mct,mcc,jE] = clusterHypoDD(mct,mcc,jE,params.NobsC);
     
     Ne  = length(jE);
-    Nct = size(mcttd,1);
-    Ncc = size(mcctd,1);
+    Nct = size(mct,1);
+    Ncc = size(mcc,1);
     
     % -- Check if we've eliminated all events!!
     if Ne < 2
         break
     end
     
+    
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %%%%%%%%%%%%%       Do Ray Tracing      %%%%%%%%%%%%%%%
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     
     % -- Assign "phase numbers" to each unique event/station combo
-    uES = unique([mcttd(:,1) mcttd(:,3)
-                  mcttd(:,2) mcttd(:,3)
-                  mcctd(:,1) mcctd(:,3)
-                  mcctd(:,2) mcctd(:,3)
-                  mcttd(:,1) mcttd(:,4)
-                  mcttd(:,2) mcttd(:,4)
-                  mcctd(:,1) mcctd(:,4)
-                  mcctd(:,2) mcctd(:,4)],'rows');    
+    uES = unique([mct(:,1) mct(:,3)
+                  mct(:,2) mct(:,3)
+                  mcc(:,1) mcc(:,3)
+                  mcc(:,2) mcc(:,3)],'rows');        
                   
     % -- Do Ray-Tracing
     [t,g,vto] = RayTrace1DhypoDD(H(uES(:,1),:),S(uES(:,2),:),Ft,Fg,Fv);
@@ -169,32 +164,29 @@ for iter = 1:params.Niter
     %%%%%%%%%% Sort data prior to taking step %%%%%%%%%%%%%
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     
-    [~,evsCT] = ismember(mcttd(:,1:2),jE);
-    [~,evsCC] = ismember(mcctd(:,1:2),jE);
+    [~,evsCT] = ismember(mct(:,1:2),jE);
+    [~,evsCC] = ismember(mcc(:,1:2),jE);
 
     % -- Index is phase number
-    [~,jptA1] =  ismember(mcttd(:,[1,3]),uES,'rows');  
-    [~,jptB1] =  ismember(mcttd(:,[2,3]),uES,'rows');
-    [~,jptA2] =  ismember(mcttd(:,[1,4]),uES,'rows');  
-    [~,jptB2] =  ismember(mcttd(:,[2,4]),uES,'rows');
-    [~,jpcA1] =  ismember(mcctd(:,[1,3]),uES,'rows');
-    [~,jpcB1] =  ismember(mcctd(:,[2,3]),uES,'rows');
-    [~,jpcA2] =  ismember(mcctd(:,[1,4]),uES,'rows');
-    [~,jpcB2] =  ismember(mcctd(:,[2,4]),uES,'rows');
+    [~,jpt1] =  ismember(mct(:,[1,3]),uES,'rows');  
+    [~,jpt2] =  ismember(mct(:,[2,3]),uES,'rows');
+    [~,jpc1] =  ismember(mcc(:,[1,3]),uES,'rows');
+    [~,jpc2] =  ismember(mcc(:,[2,3]),uES,'rows');
+
 
     % -- Observed differential times
-    dtCT = mcttd(:,6);
-    dtCC = mcctd(:,6);
+    dtCT = mct(:,5);
+    dtCC = mcc(:,5);
 
     % -- Initialize weights from input (reweight P vs. S, CC vs. CT later)
-    wCT  = mcttd(:,7);
-    wCC  = mcctd(:,7);
+    wCT  = mct(:,6);
+    wCC  = mcc(:,6);
 
     % -- Indices of P, S equations, 
-    jPct = find(mcttd(:,5)==1);
-    jSct = find(mcttd(:,5)==2);
-    jPcc = find(mcctd(:,5)==1);
-    jScc = find(mcctd(:,5)==2);
+    jPct = find(mct(:,4)==1);
+    jSct = find(mct(:,4)==2);
+    jPcc = find(mcc(:,4)==1);
+    jScc = find(mcc(:,4)==2);
 
     % -- Vector of Vp/Vs correction (for S)
     vfCT = ones(Nct,1);
@@ -203,8 +195,8 @@ for iter = 1:params.Niter
     vfCC(jScc) = params.vpvs;
 
     % -- Distance between events, and corresponding weights
-    wdCT = distanceWeightingHypoDD(mcttd,H,wd0,wd1);
-    wdCC = distanceWeightingHypoDD(mcctd,H,wd0,wd1);
+    wdCT = distanceWeightingHypoDD(mct,H,wd0,wd1);
+    wdCC = distanceWeightingHypoDD(mcc,H,wd0,wd1);
     
     % -- Relative weighting of CT vs. CC  and P vs. S data
     WCT = wCT.*wdCT*params.wCT(iter);
@@ -215,45 +207,47 @@ for iter = 1:params.Niter
     WCC(jScc) = WCC(jScc)*params.wS(iter);
 
     % -- Index unique ray-paths to get take-off angles
-    gCT = [g(jptA1,:) g(jptB1,:) g(jptA2,:) g(jptB2,:)];
-    gCC = [g(jpcA1,:) g(jpcB1,:) g(jpcA2,:) g(jpcB2,:)];
+    gCT = [g(jpt1,:) g(jpt2,:)];
+    gCC = [g(jpc1,:) g(jpc2,:)];
 
     % -- Index unique ray-paths again to get velocities at source
     % -- Divide by Vp/Vs for S-data
-    vCT = [vto(jptA1)./vfCT vto(jptB1)./vfCT];
-    vCC = [vto(jpcA1)./vfCC vto(jpcB1)./vfCC];
+    vCT = [vto(jpt1)./vfCT vto(jpt2)./vfCT];
+    vCC = [vto(jpc1)./vfCC vto(jpc2)./vfCC];
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %%%%%  Actually build linear system and solve %%%%%%%%%
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     
     % -- Form core DD matrices and RHS vectors 
-    GCT = buildHypoTDmatrix(evsCT,gCT,vCT,WCT,Ne);
-    GCC = buildHypoTDmatrix(evsCC,gCC,vCC,WCC,Ne);
-    dCT = WCT.*(dtCT-vfCT.*( (t(jptA1)-t(jptB1))-(t(jptA2)-t(jptB2)) ));
-    dCC = WCC.*(dtCC-vfCC.*( (t(jpcA1)-t(jpcB1))-(t(jpcA2)-t(jpcB2)) ));
-    %dCT = WCT.*(dtCT-vfCT.*(t(jpt1)-t(jpt2)));
-    %dCC = WCC.*(dtCC-vfCC.*(t(jpc1)-t(jpc2)));
+    GCT = buildHypoDDmatrix(evsCT,gCT,vCT,WCT,Ne);
+    GCC = buildHypoDDmatrix(evsCC,gCC,vCC,WCC,Ne);
+    dCT = WCT.*(dtCT-vfCT.*(t(jpt1)-t(jpt2)));
+    dCC = WCC.*(dtCC-vfCC.*(t(jpc1)-t(jpc2)));
     
     % -- Form zero-shift  and damping matrices and RHS vectors
-    [GZ,dZ] = ZeroShiftHypoTD(C,params.W00);
-    [GD,dD] = DampingMatrixHypoTD(C,stats.Ne0,lmbd);
+    [GZ,dZ] = ZeroShiftHypoDD(C,params.W00);
+    [GD,dD] = DampingMatrixHypoDD(C,stats.Ne0,lmbd);
     
     % -- Combine portions of systems and solve with Newton's method
     G = [GCT; GCC; GZ; GD];
-    d = [dCT; dCC; dZ; dD];
-    
-    [m,s] = solveHypoTD(G,d,H(jE,3),params.NewtonSteps,params.CGsteps, ... 
+    d = [dCT; dCC; dZ; dD];  
+    [m,s] = solveHypoDD(G,d,H(jE,3),params.NewtonSteps,params.CGsteps, ... 
                                     params.minZ,params.maxZ);
-   
-    fprintf(' % 3d   % 5d   % 3d   % 7d  % 7d   % 6.3f  % 6.3f   % 5.2f\n',  ... 
-             iter,Ne,max(C),Nct,Ncc,s.DH,s.DZ,s.prctM)                           
+    
+    fprintf(' % 3d   % 5d   % 3d   % 7d  % 7d   % 6.3f  % 6.3f  % 6.3f  % 5.2f\n',  ... 
+             iter,Ne,max(C),Nct,Ncc,s.DH,s.DZ,s.DT,s.prctM)                           
 
     % -- Update hypocenter array with computed optimal shift
     H(jE,1) = H(jE,1) + m(1:Ne);
     H(jE,2) = H(jE,2) + m(Ne+[1:Ne]);
     H(jE,3) = H(jE,3) + m(2*Ne+[1:Ne]);
-     
+    T1(jE)  = T1(jE)  + seconds(m(3*Ne+(1:Ne)));
+    
+    % -- Update differential times...
+    mct(:,5) = mct(:,5) + m(3*Ne+evsCT(:,2)) - m(3*Ne+evsCT(:,1));
+    mcc(:,5) = mcc(:,5) + m(3*Ne+evsCC(:,2)) - m(3*Ne+evsCC(:,1));
+    
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %%%%%%%%%%% Check for outlier equations %%%%%%%%%%%%%%%
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -268,10 +262,11 @@ for iter = 1:params.Niter
         MADCT = median(abs(drCT-median(drCT)));
         MADCC = median(abs(drCC-median(drCC)));
 
-        mcttd(:,7) = max(0,1-((MAD*drCT)/(aCT*MADCT)).^2).^2;
-        mcctd(:,7) = max(0,1-((MAD*drCC)/(aCC*MADCC)).^2).^2;
-        mcttd(MAD*drCT > aCT*MADCT,:) = [];
-        mcctd(MAD*drCC > aCC*MADCC,:) = [];
+        mct(:,6) = max(0,1-((MAD*drCT)/(aCT*MADCT)).^2).^2;
+        mcc(:,6) = max(0,1-((MAD*drCC)/(aCC*MADCC)).^2).^2;
+        keyboard
+        mct(MAD*drCT > aCT*MADCT,:) = [];
+        mcc(MAD*drCC > aCC*MADCC,:) = [];
     end
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -283,6 +278,7 @@ for iter = 1:params.Niter
     stats.Ncc(iter)   = Ncc;
     stats.DH(iter)    = s.DH;
     stats.DZ(iter)    = s.DH;
+    stats.DT(iter)    = s.DT;
     stats.OS(iter,:)  = s.OS;
     stats.prctM(iter) = s.prctM;
     stats.iter(iter)  = s.iter;
@@ -295,10 +291,11 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 [hyp1(jE,2),hyp1(jE,1)] = m_xy2ll(1000*H(jE,1),1000*H(jE,2));
 hyp1(jE,3) = H(jE,3);
+
 jne = setdiff((1:stats.Ne0)',jE);
 hyp1(jne,:) = NaN;
+T1(jne) = NaT;
 
-T1 = computeOriginTimesHypoTD(T0,H,S,phadir,jE,Ft,Fg,Fv,params.vpvs);
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%      Bootstrap for error estimate          %%%%%%%%
@@ -309,34 +306,34 @@ else
     
     % -- Final solution ray-tracing and
     % -- (need velocities and take-off angles) 
-    [t,g,vto] = RayTrace1DhypoDD(H(uES(:,1),:),S(uES(:,2),:),Ft,Fg,Fv); 
-    gCT  = [g(jptA1,:) g(jptB1,:) g(jptA2,:) g(jptB2,:)];
-    gCC  = [g(jpcA1,:) g(jpcB1,:) g(jpcA2,:) g(jpcB2,:)];
+    [t,g,vto] = RayTrace1DhypoDD(H(uES(:,1),:),S(uES(:,2),:),Ft,Fg,Fv);       
+    gCT  = [g(jpt1,:) g(jpt2,:)];
+    gCC  = [g(jpc1,:) g(jpc2,:)];
     vfCT = ones(Nct,1);
     vfCC = ones(Ncc,1);
     vfCT(jSct) = params.vpvs;
-    vfCC(jScc) = params.vpvs; 
-    vCT = [vto(jptA1)./vfCT vto(jptB1)./vfCT];
-    vCC = [vto(jpcA1)./vfCC vto(jpcB1)./vfCC];
+    vfCC(jScc) = params.vpvs;
+    vCT = [vto(jpt1)./vfCT vto(jpt2)./vfCT];
+    vCC = [vto(jpc1)./vfCC vto(jpc2)./vfCC];
     
     % -- Final differential times
-    dtCT = mcttd(:,6);
-    dtCC = mcctd(:,6);
+    dtCT = mct(:,5);
+    dtCC = mcc(:,5);
     
     % -- But using exact same equation set as final iteration                           
     WCT = ones(Nct,1)*params.wCT(end);
     WCC = ones(Ncc,1)*params.wCC(end);
-    GCT = buildHypoTDmatrix(evsCT,gCT,vCT,WCT,Ne);
-    GCC = buildHypoTDmatrix(evsCC,gCC,vCC,WCC,Ne);
-    dCT = WCT.*(dtCT-vfCT.*( (t(jptA1)-t(jptB1))-(t(jptA2)-t(jptB2)) ));
-    dCC = WCC.*(dtCC-vfCC.*( (t(jpcA1)-t(jpcB1))-(t(jpcA2)-t(jpcB2)) ));
+    GCT = buildHypoDDmatrix(evsCT,gCT,vCT,WCT,Ne);
+    GCC = buildHypoDDmatrix(evsCC,gCC,vCC,WCC,Ne);
+    dCT = WCT.*(dtCT-vfCT.*(t(jpt1)-t(jpt2)));
+    dCC = WCC.*(dtCC-vfCC.*(t(jpc1)-t(jpc2)));
     
     % -- Note that no damping is included
     G = [GCT; GCC; GZ];
     
     disp('--------------------------------------------------------------------')
     disp(['Bootstrapping (',num2str(params.Nboot),' iterations)'])
-    stats.err = NaN*ones(stats.Ne0,3);
-    stats.err(jE,:) = bootstrapHypoTD(G,dCT,dCC,dZ,H(jE,3),params);
+    stats.err = NaN*ones(stats.Ne0,4);
+    stats.err(jE,:) = bootstrapHypoDD(G,dCT,dCC,dZ,H(jE,3),params);
 end
-disp(['hypoTD complete ',datestr(datetime('now'))])
+disp(['hypoDD complete ',datestr(datetime('now'))])

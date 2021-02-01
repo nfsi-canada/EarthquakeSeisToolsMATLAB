@@ -6,6 +6,9 @@ function [hyp,T,picks,stats] = hypoAPP(hyp,T,picks,model,params)
 % an initial hypocenter estimate (calling the function hypoAPPgrid). It
 % repeats this process
 %
+%
+%
+%
 %   INPUTS 
 %
 %     hyp0 = [lat0,lon0,dep0] initial hypocenter
@@ -15,10 +18,9 @@ function [hyp,T,picks,stats] = hypoAPP(hyp,T,picks,model,params)
 %    model = model name 'GSC','ALASKA','ma2011'
 %            OR custom gradient model [Depth (km), Velocity (km)]
 %   params = an (optional) structure with the following fields:
-%            R = initial maximum epicentral distance (km)
-%            Z = initial maximum depth difference (km)
-%           nR = number of horizontal grid points 
-%           nZ = number of depth grid points
+%         rENZ = initial maximum distance in [E,N,Z] directions (km)
+%           NR = number of horizontal grid points 
+%           NZ = number of depth grid points
 %                It makes sense for nR,nZ to be odd numbers so that hyp0
 %                is one of the grid points
 %         minZ = minimum allowable depth (km)
@@ -26,6 +28,9 @@ function [hyp,T,picks,stats] = hypoAPP(hyp,T,picks,model,params)
 %          tol = stop iterating when grid size less than "tol" km
 %      picktol = cull picks with residual > picktol * std. dev.
 %         vpvs = constant Vp/Vs applied to whole model, default is sqrt(3)
+%       minsta = minimum number of unique stations
+%       minpha = minimum number of total phases
+%           CI = confidence intervals to report (e.g. 0.95 for 95%)
 %       
 %
 %  OUTPUTS
@@ -36,74 +41,95 @@ function [hyp,T,picks,stats] = hypoAPP(hyp,T,picks,model,params)
 %    stats = a dictionary with msft,msft0...
 
 
-iter = 0;
-npk0 = size(picks,1);
-
 % -- Sort input/default parameters
-[R,Z,nR,nZ,minZ,maxZ,picktol,vpvs,max_iter] = unpack_paramsHypoAPP(params);
+params   = unpack_paramsHypoAPP(params);
+
+% -- Check that station/phase requirements are met
+Np0 = size(picks,1);
+Ns0 = size(unique(picks(:,1:2),'rows'),1);
+if Np0 < params.minpha || Ns0 < params.minsta
+    stats.Ns0   = Ns0;
+    stats.Np0   = Np0;
+    return
+end
 
 % -- Check that depth is within bounds
-hyp( hyp(:,3) < minZ ,3) = minZ;
-hyp( hyp(:,3) > maxZ ,3) = maxZ;
+hyp( hyp(:,3) < params.minZ ,3) = params.minZ;
+hyp( hyp(:,3) > params.maxZ ,3) = params.maxZ;
 
-% -- hypoAPP only takes in 1 horizontal search distance, but it adjusts
-% -- E-W and N-S distances separately.
-ENZ   = [R,R,Z];
-CNVRG = [0 0 0];
 
-while iter < max_iter
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%     Get initial residuals and misfit        %%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+tObs  = picks(:,4);
+d     = distance(hyp(1),hyp(2),picks(:,1),picks(:,2),[6371, 0]);
+tPred = (params.vpvs.^(picks(:,3)-1)).*RayTrace(hyp(3),d,model);
+wght  = Np0*picks(:,5)/sum(picks(:,5));
+res0  = (tObs-tPred)-WeightedMedian(tObs-tPred,wght);
+msft0 = sum(wght.*abs(res0));
 
-    hyp_prev = hyp;
-  
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%      Begin iterative grid search       %%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+for iter = 1:params.max_iter
+
     % -- "hypoAPPgrid" does an iteration. Store results as temporary 
     % -- variables in case misfit increases
-    [hyp1,T1,picks1,stats1] = hypoAPPgrid(hyp,T,picks,model,ENZ(1),ENZ(2),ENZ(3),nR,nZ,minZ,maxZ,vpvs);
+    [hyp1,T,picks,stats] = hypoAPPgrid(hyp,T,picks,model,params);
     
-    % -- On the first iteration, store original misfit, and make a 
-    % -- version of "stats" to ouput in case misfit already increased
-    if ~iter
-        msft00 = stats1.msft0;
-        stats = stats1;
-        stats.msft = stats.msft0;
-        stats.res  = stats.res0;
-    end
+    % -- Compute length of hypocenter shift
+    dH = sqrt(distance(hyp(1),hyp(2),hyp1(1),hyp1(2),[6371 0])^2 ...
+                   + (hyp1(3)-hyp(3))^2);     
+    hyp = hyp1; 
     
-    % -- If misfit did not decrease, don't accept step and stop iterating
-    if stats1.msft >= stats1.msft0
+    % -- If misfit did not decrease, accept step but stop iterating
+    if stats.msft >= stats.msft0
         break
     end
-   
-    hyp    = hyp1;
-    T      = T1;
-    picks  = picks1;
-    stats  = stats1;
-    iter   = iter+1;
     
     % -- Check for outlier picks
     res    = picks(:,6);
     stdres = std(res);
-    jbad   = find(abs(res)>picktol*std(res));
+    jbad   = find(abs(res)>params.picktol*std(res));
+    
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%%%%%%%%%%%       Remove any outlier picks       %%%%%%%%%%%%%%
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     if length(jbad)
         if length(jbad>1)
             [~,jbad] = max(abs(res));
         end
         picks(jbad,:) = [];
-        continue
-    else    
-      
-        ENZt = stats.ENZ;        
-        CNVRG(ENZt <  ENZ*0.99) = 0;
-        CNVRG(ENZt >= ENZ*0.99) = 1;
         
-        if prod(CNVRG) 
+        % -- Check if minimum station/phase reqquirements are still met
+        Np = size(picks,1);
+        Ns = size(unique(picks(:,1:2),'rows'),1);
+        if Np < params.minpha || Ns < params.minsta
+            break 
+        end
+        continue
+        
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%%%%%   If there are no outliers, check if converged    %%%%%%%
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%    
+    else      
+        
+        % -- It's converged if change in hypocenter AND bounds are < tol
+        if max([dH, abs(stats.rENZ-params.rENZ)]) < params.tol
             break
         else
-            ENZ = ENZt;
-        end
-            
+            params.rENZ = stats.rENZ;
+        end           
     end
         
 end
-stats.msft0 = msft00;
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%       Add initial condidtions into stats       %%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+stats.msft0 = msft0;
+stats.res0  = res0;
+stats.Ns0   = Ns0;
+stats.Np0   = Np0;
 stats.iter  = iter;
         

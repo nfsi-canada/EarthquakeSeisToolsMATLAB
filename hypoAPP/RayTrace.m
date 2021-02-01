@@ -22,7 +22,7 @@ function [tpp,theta,dray,thetaR,v_hyp] = RayTrace(hdepth,xep,model)
 %        dray == ray-path distance in km
 %      thetaR == angle of incidence at receiver, 0 being vertically upward
 %       v_hyp == P-wave velocity at the hypocenter 
-%                (TRUE VELOCICTY, no earth-flattening transformation)
+%                (TRUE VELOCITY, no earth-flattening transformation)
 
 if ischar(model)
     switch model
@@ -62,19 +62,18 @@ if ischar(model)
          525.00 12.6
         1000.00 13.0];
     case 'customLSL'
-    DV = [  0.0000    6.2957
-            0.5414    6.3316
-            7.8400    6.3639
-           11.9677    6.5128
-           20.3364    6.5923
-           26.2131    6.7195
-           30.7402    6.9634
-           36.5219    7.1830
-           36.7068    8.0018
-           61.7558    8.0590
-          214.1407    8.0692
-          228.0988    8.3921
-          600.0000   10.0000];   
+        DV = [0  6.07
+              8  6.45
+             17  6.60
+             24  6.69
+             30  6.83
+             36  7.04
+             38  7.25
+             40  7.80
+             45  7.87
+             60  7.99
+            200  8.25
+            600  9.50]; 
     end
 else
     DV = model;

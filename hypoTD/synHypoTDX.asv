@@ -56,16 +56,16 @@ stadir = createStationsHypoDD(Ns,No,model,latC,lonC,depC);
 [phadir0,phadir1,T1] = createPhadirHypoDD(hyp0,hyp1,T0,stadir,model,vpvs,NF0,NF1);
 
 % -- Create sP data
-msp = create_sP_hypoDD(NsP,errSP,hyp0,hyp1,stadir,phadir0,model,vpvs);
+params.msp = create_sP_hypoDD(NsP,errSP,hyp0,hyp1,stadir,phadir0,model,vpvs);
 
 % -- Create double-difference times
 % -- ph2dt(hyp,phadir,maxD,maxN)
-mct = ph2dt(hyp1,phadir1,20,12);
-mcc = [];
+params.mct = ph2dt(hyp1,phadir1,20,12);
+params.mcc = [];
 
 % -- Get triple-differences
-mcttd = TripleDifferenceFull(mct);
-mcctd = TripleDifferenceFull(mcc);
+params.mcttd = TripleDifferenceFull(mct);
+params.mcctd = TripleDifferenceFull(mcc);
 
 
 % -- Set parameters
@@ -93,7 +93,6 @@ if NsP
     [hyp,T,stats] = hypoTDsP(hyp1,T1,stadir,phadir1,mcttd,mcctd,msp,model,params);
 else
     [hyp,T,stats] = hypoTD(hyp1,T1,stadir,phadir1,mcttd,mcctd,model,params);
-end
 
 jr = find(~isnan(hyp(:,1)));
 [ex,ey]   = m_ll2xy(hyp(jr,2),hyp(jr,1));

@@ -1,6 +1,5 @@
 % 2021-01-15
-% This is the driver for a triple-difference hypocenter inversion test,
-% modified from "synHypoDD" on 2021-01-15
+% This is the driver for a "hypoDD" test
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -14,11 +13,11 @@ No = 4;  % number of 'octants' with stations
          % if e.g. no = 2, stations are restricted to upper-east quadrant
          % of focal sphere.
 NsP = 4; % number of sP depth constraints
-         
+
 scl  = 3;    % Event 'separation', 0 indicates truly colocated events,
              % standard deviation of EQ coordintates in km
-errR  = 2.0; % gausian hypocenter error S.D. in km
-errS  = 0;   % mean hypocenter error centroid shift, in km
+errR = 2.0;  % gausian hypocenter error S.D. in km
+errS = 0;    % mean hypocenter error centroid shift, in km
 errSP = 0.0; % gaussian of time error added to sP-P times (s)
 
 map  = m_proj('lambert', 'lat',[42,68],'long',[-180,-140],'ell','wgs84','rect','on');
@@ -63,10 +62,6 @@ msp = create_sP_hypoDD(NsP,errSP,hyp0,hyp1,stadir,phadir0,model,vpvs);
 mct = ph2dt(hyp1,phadir1,20,12);
 mcc = [];
 
-% -- Get triple-differences
-mcttd = TripleDifferenceFull(mct);
-mcctd = TripleDifferenceFull(mcc);
-
 
 % -- Set parameters
 params.vpvs     = vpvs;
@@ -80,8 +75,8 @@ params.wS       = 1;
 params.wCT      = 1; 
 params.wCC      = 1; 
 params.lmbd     = 2e-4;
-params.alphCT   = 6;
-params.alphCC   = 6;
+params.alphCT   = 5;
+params.alphCC   = 5;
 params.W00      = 100;
 params.minsta   = 4;
 params.minstaPS = 4;
@@ -90,9 +85,9 @@ params.NobsC    = 3;
 
 % -- Actually run hypoDD!!!
 if NsP
-    [hyp,T,stats] = hypoTDsP(hyp1,T1,stadir,phadir1,mcttd,mcctd,msp,model,params);
+    [hyp,T,stats] = hypoDDsP(hyp1,T1,stadir,phadir1,mct,mcc,msp,model,params);
 else
-    [hyp,T,stats] = hypoTD(hyp1,T1,stadir,phadir1,mcttd,mcctd,model,params);
+    [hyp,T,stats] = hypoDD(hyp1,T1,stadir,phadir1,mct,mcc,model,params);
 end
 
 jr = find(~isnan(hyp(:,1)));
@@ -126,6 +121,7 @@ plot3([ex0';ex'],[ey0';ey'],[ez0';ez'],'r--')
 set(gca,'ZDir','reverse')
 grid on
 axis equal
+
 
 xlim([min([ex0;ex])-0.5, max([ex0;ex])+0.5])
 ylim([min([ey0;ey])-0.5, max([ey0;ey])+0.5])

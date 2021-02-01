@@ -43,7 +43,7 @@ model = [  0.0  6.25
 % Noise 0: remove phases (portions to remove [P,S])
 % Noise 1: standard devation of noise to picks (seconds)
 NF0 = [0.0, 0.0];
-NF1 = 0.0;
+NF1 = 0.00;
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% -- Make synthetic data
@@ -56,16 +56,20 @@ stadir = createStationsHypoDD(Ns,No,model,latC,lonC,depC);
 [phadir0,phadir1,T1] = createPhadirHypoDD(hyp0,hyp1,T0,stadir,model,vpvs,NF0,NF1);
 
 % -- Create sP data
-msp = create_sP_hypoDD(NsP,errSP,hyp0,hyp1,stadir,phadir0,model,vpvs);
+params.msp = create_sP_hypoDD(NsP,errSP,hyp0,hyp1,stadir,phadir0,model,vpvs);
 
-% -- Create double-difference times
+% -- Form double-difference times
 % -- ph2dt(hyp,phadir,maxD,maxN)
-mct = ph2dt(hyp1,phadir1,20,12);
-mcc = [];
+params.mct = ph2dt(hyp1,phadir1,20,12);
+params.mcc = [];
 
-% -- Get triple-differences
-mcttd = TripleDifferenceFull(mct);
-mcctd = TripleDifferenceFull(mcc);
+% -- Form triple-differences
+params.mcttd = TripleDifferenceFull(params.mct);
+params.mcctd = TripleDifferenceFull(params.mcc);
+
+% -- Form station-pair double-difference times
+params.mst = ph2dtSTA(phadir1);
+params.msc = [];
 
 
 % -- Set parameters
@@ -79,21 +83,19 @@ params.wP       = 1;
 params.wS       = 1; 
 params.wCT      = 1; 
 params.wCC      = 1; 
+params.wST      = 1; 
+params.wSC      = 1;
 params.lmbd     = 2e-4;
 params.alphCT   = 6;
 params.alphCC   = 6;
-params.W00      = 100;
+params.W00      = 0.1;
 params.minsta   = 4;
 params.minstaPS = 4;
 params.Nboot    = 200;
 params.NobsC    = 3;
 
 % -- Actually run hypoDD!!!
-if NsP
-    [hyp,T,stats] = hypoTDsP(hyp1,T1,stadir,phadir1,mcttd,mcctd,msp,model,params);
-else
-    [hyp,T,stats] = hypoTD(hyp1,T1,stadir,phadir1,mcttd,mcctd,model,params);
-end
+[hyp,T,stats] = hypoTDX(hyp1,T1,stadir,phadir1,model,params);
 
 jr = find(~isnan(hyp(:,1)));
 [ex,ey]   = m_ll2xy(hyp(jr,2),hyp(jr,1));

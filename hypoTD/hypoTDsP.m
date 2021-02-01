@@ -1,5 +1,5 @@
-function [hyp1,T1,stats] = hypoTD(hyp0,T0,sta,phadir,mcttd,mcctd,model,params)
-% function [hyp1,T1,stats] = hypoTD(hyp0,T0,sta,phadir,mct,mcc,model,params)
+function [hyp1,T1,stats] = hypoTDsP(hyp0,T0,sta,phadir,mcttd,mcctd,msp,model,params)
+% function [hyp1,T1,stats] = hypoTDsP(hyp0,T0,sta,phadir,mcttd,mcctd,msp,model,params)
 %
 % 2020-01-15
 % This code was modifed from "hypoDD.m", which mimics the program hypoDD
@@ -7,7 +7,8 @@ function [hyp1,T1,stats] = hypoTD(hyp0,T0,sta,phadir,mcttd,mcctd,model,params)
 % than double-differences, removing origin times from the system (they are
 % computed at the end).
 %
-% Some comments refer to Waldhauser and Ellsworth (2000,BSSA) as W2000
+% This is the special "sP" version of "hypoTD" that uses sP phases as
+% additional depth constraints.
 %
 %   INPUTS 
 %
@@ -19,6 +20,7 @@ function [hyp1,T1,stats] = hypoTD(hyp0,T0,sta,phadir,mcttd,mcctd,model,params)
 %            [EVa,EVb,STA1,STA2,PHA,DDT,(CC)]
 %    mcctd = waveform differential times ((t1a-t1b)-(t2a-t2b))_obs
 %            [EVa,EVb,STA1,STA2,PHA,DDT,CC]
+%      msp = [EV,STA,T] sP-P times
 %    model = N_layer x 2 matrix [Depth,Velocity]
 %   params = structure of optional paramters
 %
@@ -36,12 +38,16 @@ end
 if isempty(mcctd)
     mcctd = zeros(0,7);
 end
+if isempty(msp)
+    msp = zeros(0,3);
+end
 
 Ne  = size(hyp0,1);
 Ns  = size(sta,1);
 Np  = size(phadir,1);
 Nct = size(mcttd,1);
 Ncc = size(mcctd,1);
+Nsp = size(msp,1);
 
 % -- Sort input/default parameters 
 params = unpack_paramsHypoDD(params);
@@ -55,6 +61,10 @@ jE = (1:Ne)';
 
 % -- Prep interpolants of travel-time, take-off angle, source-velocity
 [Ft,Fg,Fv] = prep1DgridHypoDD(model,params.GXmax,params.GZmax);
+
+% -- Prep interpolant of depth given distance and sP time
+FZsp = prepInterpolant_sP(model,params.vpvs,params.GXmax,params.GZmax);
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%   Set up map. NOTE: REQUIRES M_MAP PACKAGE    %%%%%%
@@ -85,11 +95,13 @@ stats.Ns0 = Ns;
 stats.Np0 = Np;
 stats.Nct0 = Nct;
 stats.Ncc0 = Ncc;
+stats.Nsp0 = Nsp;
 
 stats.Nclst = zeros(params.Niter,1);
 stats.Ne    = zeros(params.Niter,1);
 stats.Nct   = zeros(params.Niter,1);
 stats.Ncc   = zeros(params.Niter,1);
+stats.Nsp   = zeros(params.Niter,1);
 stats.DH    = zeros(params.Niter,1);
 stats.DZ    = zeros(params.Niter,1);
 stats.DT    = zeros(params.Niter,1);
@@ -147,6 +159,9 @@ for iter = 1:params.Niter
         break
     end
     
+    msp = msp(ismember(msp(:,1),jE),:);
+    Nsp = size(msp,1);
+    
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %%%%%%%%%%%%%       Do Ray Tracing      %%%%%%%%%%%%%%%
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -159,7 +174,8 @@ for iter = 1:params.Niter
                   mcttd(:,1) mcttd(:,4)
                   mcttd(:,2) mcttd(:,4)
                   mcctd(:,1) mcctd(:,4)
-                  mcctd(:,2) mcctd(:,4)],'rows');    
+                  mcctd(:,2) mcctd(:,4)],'rows');
+         
                   
     % -- Do Ray-Tracing
     [t,g,vto] = RayTrace1DhypoDD(H(uES(:,1),:),S(uES(:,2),:),Ft,Fg,Fv);
@@ -171,6 +187,7 @@ for iter = 1:params.Niter
     
     [~,evsCT] = ismember(mcttd(:,1:2),jE);
     [~,evsCC] = ismember(mcctd(:,1:2),jE);
+    [~,evsSP] = ismember(msp(:,1),jE);
 
     % -- Index is phase number
     [~,jptA1] =  ismember(mcttd(:,[1,3]),uES,'rows');  
@@ -232,16 +249,19 @@ for iter = 1:params.Niter
     GCC = buildHypoTDmatrix(evsCC,gCC,vCC,WCC,Ne);
     dCT = WCT.*(dtCT-vfCT.*( (t(jptA1)-t(jptB1))-(t(jptA2)-t(jptB2)) ));
     dCC = WCC.*(dtCC-vfCC.*( (t(jpcA1)-t(jpcB1))-(t(jpcA2)-t(jpcB2)) ));
-    %dCT = WCT.*(dtCT-vfCT.*(t(jpt1)-t(jpt2)));
-    %dCC = WCC.*(dtCC-vfCC.*(t(jpc1)-t(jpc2)));
+   
+    % -- Form sP depth constraint matrix
+    [GsP,dsP] = sPmatrixHypoTD(msp,H,S,FZsp,params.wSP(iter),jE);
     
-    % -- Form zero-shift  and damping matrices and RHS vectors
-    [GZ,dZ] = ZeroShiftHypoTD(C,params.W00);
+    % -- Form zero-shift and damping matrices and RHS vectors
+    
+    [GZ,dZ] = ZeroShiftHypoTD(C,params.W00,evsSP);
     [GD,dD] = DampingMatrixHypoTD(C,stats.Ne0,lmbd);
     
+    
     % -- Combine portions of systems and solve with Newton's method
-    G = [GCT; GCC; GZ; GD];
-    d = [dCT; dCC; dZ; dD];
+    G = [GCT; GCC; GsP; GZ; GD];   
+    d = [dCT; dCC; dsP; dZ; dD];
     
     [m,s] = solveHypoTD(G,d,H(jE,3),params.NewtonSteps,params.CGsteps, ... 
                                     params.minZ,params.maxZ);
@@ -281,6 +301,7 @@ for iter = 1:params.Niter
     stats.Ne(iter)    = Ne;
     stats.Nct(iter)   = Nct;
     stats.Ncc(iter)   = Ncc;
+    stats.Nsp(iter)   = Nsp;
     stats.DH(iter)    = s.DH;
     stats.DZ(iter)    = s.DH;
     stats.OS(iter,:)  = s.OS;
