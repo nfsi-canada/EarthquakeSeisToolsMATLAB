@@ -1,5 +1,5 @@
-function [PSV,thtB] = RU2PSV(RU,tht,a,b,d_tht,winP,winS)
-% function PSV,thtB] = RU2PSV(RU,tht,a,d_tht,winP,winS)
+function [PSV,thtB] = RU2PSV_winPS(RU,tht,a,b,d_tht,winP,winS)
+% function PSV,thtB] = RU2PSV_winPS(RU,tht,a,d_tht,winP,winS)
 %
 % 2020-04-01
 % This function converts radial and vertical (up) components of a 
@@ -7,7 +7,10 @@ function [PSV,thtB] = RU2PSV(RU,tht,a,b,d_tht,winP,winS)
 % velocities at the surface (a and b). The equation comes from Shearer
 % (Introduction to Seismology) 7.34 (on page 200);
 %
-% THIS CODE ASSUMES THE UPCOMING WAVE IS A P-WAVE
+% This code assumes the upcoming wave is for the P component and S
+% for the SV component, which is useful for measuring P / SV amplitudes.
+% For a version that assumes the original upcoming wave is P, see
+% RU2PSV.
 %
 %  INPUTS
 %
@@ -30,15 +33,10 @@ function [PSV,thtB] = RU2PSV(RU,tht,a,b,d_tht,winP,winS)
 %   thtB = "best-fit" incidence angle
 
 if nargin < 5 
-    p = sind(tht)/a;
-    Na = sqrt(a^-2 - p^2);
-    Nb = sqrt(b^-2 - p^2);
-
-    % -- X = [X_pr X_pu; X_sr X_su]
-    %X = [p*b^2/a,               (1-2*b^2*p^2)/(2*a*Na)
-    %    (1-2*b^2*p^2)/(2*b*Nb), -p*b];
-    %
-    %PSV = (X*RU')';
+    pa = sind(tht)/a;
+    pb = sind(tht)/b;
+    Na = sqrt(a^-2 - pa^2);
+    Nb = sqrt(b^-2 - pb^2);
     
     % -- [P SV] = [R U][X_PR  X_SR
     %                   X_PU  X_SU] 
@@ -53,15 +51,16 @@ else
     PWR   = -Inf;
     
     for ii = 1:length(rngT)
-        p = sind(rngT(ii))/a;
-        Na = sqrt(a^-2 - p^2);
-        Nb = sqrt(b^-2 - p^2);
-
+        pa = sind(rngT(ii))/a;
+        pb = sind(rngT(ii))/b;
+        Na = sqrt(a^-2 - pa^2);
+        Nb = sqrt(b^-2 - pb^2);
+        
         % -- X = [X_PR X_SR; X_PU X_SU]
         X = [pa*b^2/a, (1-2*b^2*pb^2)/(2*b*Nb)         
             (1-2*b^2*pa^2)/(2*a*Na),    -pb*b];
         psv = RU*X;
-
+        
         pwr = sum(psv(winP,1).^2) + sum(psv(winS,2).^2) - ...
               sum(psv(winS,1).^2) - sum(psv(winP,2).^2);
 
