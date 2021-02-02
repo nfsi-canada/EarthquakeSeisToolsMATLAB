@@ -78,10 +78,6 @@ for ii = 1:nx
     gSV(:,ii) = sind(toa).*gSz(:,ii) - cosd(toa).*gR;
 end
 
-% -- Free-surface transformation????
-
-
-
 
 % -- Weight by inverse square root of P-wave travel time. 
 % -- Down-weight single component measurements by a factor of 3
