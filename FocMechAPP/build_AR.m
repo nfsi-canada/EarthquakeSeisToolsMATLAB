@@ -70,7 +70,6 @@ gSx = [gx, zr, zr, gy, gz, zr] - repmat(gx,1,6).*gP;
 gSy = [zr, gy, zr, gx, zr, gz] - repmat(gy,1,6).*gP;
 gSz = [zr, zr, gz, zr, gx, gy] - repmat(gz,1,6).*gP;
 
-
 gSH = zeros(Ntmp,nx);
 gSV = zeros(Ntmp,nx);
 for ii = 1:nx
@@ -79,14 +78,17 @@ for ii = 1:nx
     gSV(:,ii) = sind(toa).*gSz(:,ii) - cosd(toa).*gR;
 end
 
+% -- Free-surface transformation????
+
+
+
 
 % -- Weight by inverse square root of P-wave travel time. 
-% -- Down-weight single component measurements by a factor of 2
-wghtR      = TP.^(-1/2);
-wghtR      = wghtR/mean(wghtR);  
-wghtR(jjV) = wghtR(jjV)/2; 
-wghtR      = [wghtR(jj3); wghtR(jj3); wghtR(jj3); wghtR(jjV)];
-
+% -- Down-weight single component measurements by a factor of 3
+% -- Upweight P-SH (the most stable ratio) by a factor of 3
+wghtR      = TP.^(-1/2); 
+wghtR      = [wghtR(jj3); 3*wghtR(jj3); wghtR(jj3); wghtR(jjV)/3];
+wghtR      = wghtR/mean(wghtR); 
 
 % -- 2020-07-13  MISSING (VP/VS)^2 ratio term????
 % -- Or should it be cubed??

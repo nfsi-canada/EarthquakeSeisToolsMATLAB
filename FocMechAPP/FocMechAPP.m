@@ -77,7 +77,8 @@ ProbFM = prod(ProbFM);
 [AR,bR,NR] = build_AR(PVH,Qp,Qs,vpvs);
 
 % -- Convert linear system misfits to (relative) probability
-msftR = vecnorm( abs((AR(:,1:nx)*crsX)./(AR(:,nx+1:end)*crsX))-repmat(bR,1,ng),1);
+msftR = vecnorm(abs((AR(:,1:nx)*crsX)./(AR(:,nx+1:end)*crsX))-repmat(bR,1,ng),1);
+%msftR = vecnorm(log(abs((AR(:,1:nx)*crsX)./(AR(:,nx+1:end)*crsX)))-log(repmat(bR,1,ng)),1);
 msftR = msftR/min(msftR);     
 ProbR = msftR.^(-(NR));
 
@@ -97,5 +98,6 @@ ProbX = ProbX/sum(ProbX(jj));
 
 % -- Search around best grid 
 [sdr1,sdr2,err] = solveDC_L1(X0,ProbX(jj),xyzP(:,jj),xyzT(:,jj),xyzI(:,jj));
+
 
 
