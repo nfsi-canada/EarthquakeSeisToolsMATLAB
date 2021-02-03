@@ -1,10 +1,10 @@
-This .ZIP file contains MATLAB scripts associated with the publication:
+This collection contains MATLAB scripts associated with the publication:
 
     Plourde A.P. and M. R. Nedimovic (Submitted). Earthquake depths, focal 
         mechanisms, and stress in the Lower St. Lawrence Seismic Zone.
         Seismological Research Letters. 
 
-and was last updated November 20, 2020. 
+and was last updated February 3, 2021. 
  
 Many of the MATLAB scripts have fairly detailed descriptions of their function
 within themselves; however, this documentation is far from complete. Most of
@@ -22,15 +22,14 @@ that read or write external files.
 To use these codes, I recommend adding the following lines to your MATLAB
 startup.m file, modifying dr0 to your MATLAB home directory.
 
-dr0 = 'C:\Users\alex\NextCloud\MATLAB\';
+dr0 = 'YOUR_MATLAB_PATH\';
 addpath(dr0);
 addpath([dr0,'EQ_FocalMech_MT\']);
 addpath([dr0,'EQ_Plotting\']);
 addpath([dr0,'FocMechAPP\']);
 addpath([dr0,'hypoAPP\']);
+addpath([dr0,'hypoDD\']);
 addpath([dr0,'hypoTD\']);
-addpath([dr0,'hypoTD\hypoTD_functions\']);
-addpath([dr0,'hypoTD\hypoTD_pieces\']);
 addpath([dr0,'Numerical_Methods\']);
 addpath([dr0,'Signal_Processing\']);
 clear dr0
@@ -74,7 +73,14 @@ grid-searches, each testing a 3D grid of potential hypocenters, centered around
 an initial estimate. It returns a best-fit hypocenter and 95% confidence 
 intervals in each direction (E,N,Z). 
 
-    
+
+% --  hypoDD
+
+An implementation of the double-difference earthquake relocation method
+"hypoDD" by Waldhauser and Ellsworth (2000,BSSA). It also includes functions
+to read/write files related to running the original hypoDD software.
+ 
+ 
 % --  hypoTD
 
 Estimates earthquake hypocenters with pick-based and waveform-based
@@ -89,6 +95,19 @@ angles on each focal mechanism can be input, allowing robust uncertainty
 estimates of the stress tensor. The name owes to its inspiration from the 
 algorithm of Vavrycuk (2014,GJI).
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%
+References
+
+Guo, H., and H. Zhang (2017). Development of double-pair double dierence earthquake location
+algorithm for improving earthquake locations. Geophysical Journal International, 208, 333-348.
+doi:10.1093/gji/ggw397.
+
+Vavrycuk V. [2014]. Iterative joint inversion for stress and fault orientations from focal
+mechanisms. Geophysical Journal International, 199, 69-77, doi:10.1093/gji/ggu224.
+
+Waldhauser F and Ellsworth WL. [2000]. A double-difference earthquake location algorithm:
+Method and application to the Northern Hayward Fault, California. Bulletin of the
+Seismological Society of America, 90, 1353-1368, doi:10.1785/0120000006.
 
     
 
