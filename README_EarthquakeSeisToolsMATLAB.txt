@@ -12,7 +12,10 @@ the codes have been thoroughly tested, but I make zero guarantees that they
 function as intended. Testing was mostly performed on WINDOWS with 
 MATLAB 2017a. There may be slight modifications required for operation with 
 other versions of MATLAB or in UNIX or MAC environments, especially for codes 
-that read or write external files.
+that read or write external files. 
+
+Please feel free to send any questions or bug reports to:
+ap.plourde@dal.ca
 
     - Alexandre P. Plourde
 
@@ -84,8 +87,10 @@ to read/write files related to running the original hypoDD software.
 % --  hypoTD
 
 Estimates earthquake hypocenters with pick-based and waveform-based
-differential travel-times, based on the "triple diffrence" or 
+differential travel-times, based on the "triple difference" or 
 "double-pair double-difference" of Guo and Zhang (2017,GJI). 
+hypoTDX.m is the most recently updated and most flexible version of 
+the main function.
 
 
 % --  StressInvV2014
