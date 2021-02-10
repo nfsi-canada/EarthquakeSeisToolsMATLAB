@@ -23,21 +23,17 @@ function [mct,mcc,jE] = checkMinStaHypoDD(mct,mcc,jE,minsta,minstaPS)
 Ne = length(jE);
 
 while 1
+   
+    MP = [mct(mct(:,4)==1,1:3); mcc(mcc(:,4)==1,1:3)];
+    MS = [mct(mct(:,4)==2,1:3); mcc(mcc(:,4)==2,1:3)];
 
-    NstaP = zeros(Ne,1);
-    NstaS = zeros(Ne,1);
-    Nsta  = zeros(Ne,1);
-
-    MP = [mct(mct(:,4)==1,:); mcc(mcc(:,4)==1,:)];
-    MS = [mct(mct(:,4)==2,:); mcc(mcc(:,4)==2,:)];
-
-    for ie = 1:Ne
-        staP = unique(MP(find((MP(:,1)==jE(ie))+(MP(:,2)==jE(ie))),3));
-        staS = unique(MS(find((MS(:,1)==jE(ie))+(MS(:,2)==jE(ie))),3));
-        NstaP(ie) = length(staP);
-        NstaS(ie) = length(staS);
-        Nsta(ie)  = length(unique([staP(:); staS(:)]));
-    end
+    % -- Count number of P,S stations
+    AP    = unique([MP(:,[1 3]); MP(:,[2 3])],'rows');
+    AS    = unique([MS(:,[1 3]); MS(:,[2 3])],'rows');
+    APS   = unique([AP; AS],'rows');
+    NstaP = hist(AP(:,1),jE);
+    NstaS = hist(AS(:,1),jE);
+    Nsta  = hist(APS(:,1),jE);
     
     jcull = find((Nsta <minsta) + (NstaP+NstaS < minstaPS));
     if isempty(jcull)
