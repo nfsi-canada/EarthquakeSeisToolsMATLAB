@@ -27,6 +27,71 @@ Ne = length(jE);
 A  = [mcttd(:,1:5); mcctd(:,1:5)];
 [~,A(:,1:2)] = ismember(A(:,1:2),jE);
 A(:,1:2) = sort(A(:,1:2),2);
+A(:,3:4) = sort(A(:,3:4),2);
+A = unique(A,'rows');
+A = A(:,1:2);
+
+% -- 
+C  = (1:Ne)';
+%Nc = 0;
+
+% -- Keep iterating until events are fully clustered...
+while 1
+
+    % -- Look for cluster-pairs with > Nobs comparisons
+    uA = unique(A,'rows');
+    [~,juA] = ismember(A,uA,'rows');
+    N  = hist(juA,(1:size(uA,1))); 
+    jN = find(N >= Nobs);
+    
+    % -- If no event/cluster pairs have Nobs links, try adding additional
+    % -- unclustered events?
+    % -- We'd want Nobs station/phase combos at all three events...
+    % -- For now, I need at least Nobs comps between a single event pair
+    % -- to start a cluster...
+    if ~length(jN)
+        break
+    end
+    
+    % -- Only change the cluster index of an event once per iteration
+    [~,ju] = unique(uA(jN,2));
+    jN = jN(sort(ju));
+    
+    % -- For each pair with >Nobs links... 
+    C0 = C;
+    for jj = jN 
+        C(C==uA(jj,2)) = uA(jj,1);     
+    end
+    
+    % -- Remove comparisons that are now in the same cluster
+    [~,jC0] = ismember(A(:,1:2),C0);
+    A(:,1:2) = C(jC0);
+    A(A(:,1) == A(:,2),:) = [];
+
+    % -- Sort to make sure event/cluster numbers always in same order
+    A = sort(A,2);
+ 
+end
+
+% -- Count number of times each cluster index occurs
+uC = unique(C);
+hC = hist(C,uC);
+
+% -- Remove data with unclustered-events
+% -- Remove unclusterd events from 
+j0 = uC(find(hC==1));
+mcttd(find(ismember(mcttd(:,1),jE(j0))+ismember(mcttd(:,2),jE(j0))),:) = [];
+mcctd(find(ismember(mcctd(:,1),jE(j0))+ismember(mcctd(:,2),jE(j0))),:) = [];
+jE(j0) = [];
+C(j0)  = [];
+Ne = length(jE);
+
+% -- Renumber clusters consecutively
+[~,C] = ismember(C,unique(C));
+
+
+%{
+A(:,1:2) = sort(A(:,1:2),2);
 A = unique(A,'rows');
 
 % -- Start counting clusters with negative numbers
@@ -103,3 +168,4 @@ mcctd(find(ismember(mcctd(:,1),jE(j0))+ismember(mcctd(:,2),jE(j0))),:) = [];
 jE(j0) = [];
 C(j0)  = [];
 Ne = length(jE);
+%}

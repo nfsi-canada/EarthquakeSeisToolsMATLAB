@@ -30,17 +30,17 @@ while 1
     NstaS = zeros(Ne,1);
     Nsta  = zeros(Ne,1);
 
-    MP = [mcttd(mcttd(:,5)==1,:); mcctd(mcctd(:,5)==1,:)];
-    MS = [mcttd(mcttd(:,5)==2,:); mcctd(mcctd(:,5)==2,:)];
+    MP = [mcttd(mcttd(:,5)==1,1:4); mcctd(mcctd(:,5)==1,1:4)];
+    MS = [mcttd(mcttd(:,5)==2,1:4); mcctd(mcctd(:,5)==2,1:4)];
 
     % -- Count number of P,S stations
-    for ie = 1:Ne
-        staP = unique(MP(find((MP(:,1)==jE(ie))+(MP(:,2)==jE(ie))),3:4));
-        staS = unique(MS(find((MS(:,1)==jE(ie))+(MS(:,2)==jE(ie))),3:4));
-        NstaP(ie) = length(staP);
-        NstaS(ie) = length(staS);
-        Nsta(ie)  = length(unique([staP(:); staS(:)]));     
-    end
+    AP    = unique([MP(:,[1 3]); MP(:,[1 4]); MP(:,[2 3]); MP(:,[2 4])],'rows');
+    AS    = unique([MS(:,[1 3]); MS(:,[1 4]); MS(:,[2 3]); MS(:,[2 4])],'rows');
+    APS   = unique([AP; AS],'rows');
+    NstaP = hist(AP(:,1),jE);
+    NstaS = hist(AS(:,1),jE);
+    Nsta  = hist(APS(:,1),jE);
+
     
     % -- Check for events that don't meet minimum requirements 
     jcull = find((Nsta <minsta) + (NstaP+NstaS < minstaPS));
@@ -62,3 +62,6 @@ while 1
     
 end
     
+
+%staP = unique(MP(find((MP(:,1)==jE(ie))+(MP(:,2)==jE(ie))),3:4));
+%staS = unique(MS(find((MS(:,1)==jE(ie))+(MS(:,2)==jE(ie))),3:4));
