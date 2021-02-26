@@ -80,6 +80,7 @@ end
 % -- Initialize other stats fields 
 S.NP    = 0;
 S.NS    = 0;
+S.dof   = 0;
 S.iter  = 0;
 S.res0  = [];
 S.res   = [];
@@ -119,6 +120,7 @@ if length(jnan)
 end
 
 % -- Normalize pick weights and label observed pick times
+% -- Compute effective degrees of freedom (dof)
 wght  = Np*P(:,5)/sum(P(:,5));
 dof   = Np^2/sum(wght.^2);
 tObs  = P(:,6); 
@@ -320,7 +322,7 @@ S.errZ = S.errZ-H(3);
 S.iter     = iter;
 S.NP       = length(find(P(:,4)==1));
 S.NS       = length(find(P(:,4)==2));
-
+S.dof      = dof;
     
 
 
