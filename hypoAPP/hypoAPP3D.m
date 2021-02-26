@@ -120,6 +120,7 @@ end
 
 % -- Normalize pick weights and label observed pick times
 wght  = Np*P(:,5)/sum(P(:,5));
+dof   = Np^2/sum(wght.^2);
 tObs  = P(:,6); 
 
 
@@ -204,7 +205,7 @@ for ii = 1:Ng
     tPred   = tpp(jsta).*PSfac;
     res     = (tObs-tPred)-WeightedMedian(tObs-tPred,wght);
     msft    = sum(wght.*abs(res));
-    A(ii,5) = (A(ii,4)^3)*(msft*Mscl).^(-Np);
+    A(ii,5) = (A(ii,4)^3)*(msft*Mscl).^(-dof);
 end
 
 % -- Create matrix to store previous hypocenters
@@ -243,6 +244,7 @@ for iter = 1:params.max_iter
             msft     = sum(wght.*abs(res));
             An(ii,5) = vol*(msft*Mscl).^(-Np);
         end 
+        
     % -- If the cube is small, don't do full ray-tracing.
     % -- Assume ray takes basically the same shape, just resample the 
     % -- velocity model with the slightly pertubed ray-path
@@ -267,8 +269,7 @@ for iter = 1:params.max_iter
             An(ii,5) = vol*(msft*Mscl).^(-Np);
         end
     end
-    
-    
+     
     % -- Merge new cell with existing ones
     % -- Remove the cell that was just divided into eight
     A = [A([1:jmx-1,jmx+1:end],:); An];
@@ -306,7 +307,7 @@ S.msft = sum(wght.*abs(S.res));
 P = [P(:,1:4), wght, tObs, tPred, res];
 
 % -- Redo last step to get uncertainy bounds
-% -- Uncertainties (95%) in x/y/z directions
+% -- Uncertainties (95%?) in x/y/z directions
 pct = [(1-params.CI)/2  1-(1-params.CI)/2];
 [~,S.errX] = WeightedMedian(A(:,1),A(:,5),pct);
 [~,S.errY] = WeightedMedian(A(:,2),A(:,5),pct);
