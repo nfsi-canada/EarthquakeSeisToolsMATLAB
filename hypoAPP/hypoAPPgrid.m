@@ -64,6 +64,9 @@ msft  = sum(wght.*abs(res));
 res0  = res;
 msft0 = msft;
 
+% -- Effective degrees of freedom
+dof = sum(wght)^2/sum(wght.^2);
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%          Set up grid          %%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -116,7 +119,7 @@ end
 % -- Assume grid contains all the probability??
 % -- Dimensions are [Lat,Lon,Dep]
 % -- If picks have different weights what should go in the exponent?
-probG  = msftG.^(-Np);
+probG  = msftG.^(-dof);
 probG  = reshape(probG,[params.NH,params.NH,params.NZ]);
 probGE = sum(sum(probG,3),2);
 probGN = sum(sum(probG,3),1)';
@@ -165,7 +168,7 @@ stats.bndE  = cE(2:3)-hE;
 stats.bndN  = cN(2:3)-hN;
 stats.bndZ  = cZ(2:3)-hyp(3);
 stats.rENZ  = [max(abs(cE)),max(abs(cN)),max(abs(cZ-hyp(3)))];
-
+stats.dof   = dof;
 
 
 
