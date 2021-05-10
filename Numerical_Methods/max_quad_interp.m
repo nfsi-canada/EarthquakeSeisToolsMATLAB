@@ -22,8 +22,8 @@ function [xmax,dmax] = max_quad_interp(x,d)
 %  dmax == estimated maximum cross-correlation
 
 % -- Ensure input are column vectors
-x = mkcol(x);
-d = mkcol(d);
+x = x(:);
+d = d(:);
 
 % -- Columns of A are (x^2, x, 1 -- multiplied by a,b,c)
 % -- for a  ax^2 + bx + c = 0 model
@@ -33,14 +33,9 @@ A = [x.^2, x, ones(3,1)];
 abc = A\d;
 
 % -- Get x at maximum, new maximum of ccf;
-xmax = -abc(2)/(2*abc(1));
-
 % -- Ensure the maxima (or minima) is within these three samples
-if xmax < x(1)
-    xmax = x(1);
-elseif xmax > x(3) 
-    xmax = x(3);
-end
+xmax = -abc(2)/(2*abc(1));
+xmax = min( max(xmax,min(x)),max(x) );
 
 % -- Get max (or min) of d
 dmax = dot(abc,[xmax.^2; xmax; 1]);
