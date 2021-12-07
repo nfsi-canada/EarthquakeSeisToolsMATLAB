@@ -15,6 +15,10 @@ function [TRND,PLNG,R,uS,uR] = StressInvV2014(sdr,nx,ndg,MTHD,prcntU)
 % altering strike/dip/rake. Also it now allows for errors speciifc to 
 % each event
 %
+% 2021-12-21
+% Updated to rotate focal mechanisms (to perturb them according to their
+% uncertainty) by using a random Quaternion
+%
 %    INPUTS
 %
 %       sdr = NE x 6 matrix [STRIKE1,DIP1,RAKE1,STRIKE2,DIP2,RAKE2]
@@ -62,8 +66,10 @@ end
 if strcmp(MTHD,'I')
     Qfun = @(I,dotR) I;
 elseif strcmp(MTHD,'R')
+    %Qfun = @(I,dr) -abs(dr);
     Qfun = @(I,dotR) dotR;
 elseif strcmp(MTHD,'C')
+    %Qfun = @(I,dotR) I.*(1-abs(dotR)/90);
     Qfun = @(I,dotR) I.*(dotR);
 end
 
@@ -89,26 +95,21 @@ for ii = 1:nx
 
     mu = mus(ii);
 
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% -- Add noise to strk,dip,rake 
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% -- Add noise to FMs
     
     % -- Angle to rotate each event (in degrees)
     %NdgR = ndg.*randn(ne,1);
     
     % -- Random Laplacian (with "ndg" == b, ... variance=2*b^2);
     u = rand(ne,1)-0.5;
-    NdgR = -ndg.*sign(u).*log(1-2*abs(u));
+    NdgR = abs(ndg.*sign(u).*log(1-2*abs(u)));
     
     for ie = 1:ne
         
-        % -- Pythagorean theorem applies to rotations around perperdicular
-        % -- axes?... sepearate rotation of NdgR deg into x,y,z components
-        % -- IS THIS TRUE???
-        a = randn(3,1);
-        a = a*NdgR(ie)/norm(a);
-        RMx = [1 0 0; 0 cosd(a(1)) -sind(a(1)); 0 sind(a(1)) cosd(a(1))];
-        RMy = [cosd(a(2)) 0 sind(a(2)); 0 1 0; -sind(a(2)) 0 cosd(a(2))];
-        RMz = [cosd(a(3)) -sind(a(3)) 0; sind(a(3)) cosd(a(3)) 0; 0 0 1];
-        RM  = RMx*RMy*RMz;
+        % -- Random Quaternion to perform rotation (perturbations)
+        RM = Quat2RotMtrx(RandomQuaternion(1));
+        RM = real(RM^(NdgR(ie)/acosd((trace(RM)-1)/2)));
+        
         n1(ie,:) = n0(ie,:)*RM;
         v1(ie,:) = v0(ie,:)*RM;
     end
@@ -142,6 +143,7 @@ for ii = 1:nx
         b = -tv(:);
                 
         x = A\b;
+        %[x,msft(ii)] = iterativeStressSolver(A,b,1e-4);
         
         X = x([1 2 3; 2 4 5; 3 5 1]);
         X(3,3) = -X(1,1)-X(2,2);
@@ -203,20 +205,11 @@ jc  = find(cnvg);
 njc = length(jc);
 
 % -- Get axes estimates from mean X...
-%xmn = sum(xf(:,jc).*repmat((1-msft(jc)').^2,5,1),2)/sum((1-msft(jc)).^2);
-xmn = sum(xf.*repmat((1-msft').^2,5,1),2)/sum((1-msft).^2);
+xmn = sum(xf,2)/nx;
 X      = xmn([1 2 3; 2 4 5; 3 5 1]);
 X(3,3) = -X(1,1)-X(2,2);
-[V,S]  = eig(X);
-S = flip(diag(S));
-V = fliplr(V);
-V(:,V(3,:)>0) = -V(:,V(3,:)>0);
-PLNG = -asind(V(3,:))';
-TRND = 90-atan2d(V(2,:),V(1,:))';
-R = (S(1)-S(2))/(S(1)-S(3)); 
 
-TRND(TRND<0) = TRND(TRND<0)+360;
-
+[TRND,PLNG,R] = StressTensor2Axes(X);
 
 % -- Final sigma 1,2,3 direction are in the columns of V
 % -- each iteration's version are in Vs..
@@ -240,7 +233,6 @@ uS  = [sg1,sg2,sg3];
 
 bU = 50+[-pU'; pU']/2;
 uR = reshape(prctile(Rs,bU(:)),[2 NU]);
-
 
 
 
