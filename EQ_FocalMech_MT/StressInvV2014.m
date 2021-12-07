@@ -90,8 +90,18 @@ Rs   = zeros(nx,1);
 n1 = n0;
 v1 = v0;
 
+% -- Run in parallel if pool is open
+pool = gcp('nocreate');
+if isempty(pool)
+    Nworker = 0;
+else
+    Nworker = pool.NumWorkers;
+end
+
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-for ii = 1:nx
+%for ii = 1:nx
+parfor (ii=1:nx,Nworker)
 
     mu = mus(ii);
 
@@ -123,6 +133,8 @@ for ii = 1:nx
         
     A1 = BuildStressMatrix(n1);
     A2 = BuildStressMatrix(n2);
+    
+    rn = zeros(ne,3,2);
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     
@@ -210,6 +222,11 @@ X      = xmn([1 2 3; 2 4 5; 3 5 1]);
 X(3,3) = -X(1,1)-X(2,2);
 
 [TRND,PLNG,R] = StressTensor2Axes(X);
+
+V = zeros(3);
+V(:,1) = [cosd(90-TRND(1))*cosd(PLNG(1)); sind(90-TRND(1))*cosd(PLNG(1)); sind(PLNG(1))];
+V(:,2) = [cosd(90-TRND(2))*cosd(PLNG(2)); sind(90-TRND(2))*cosd(PLNG(2)); sind(PLNG(2))];
+V(:,3) = [cosd(90-TRND(3))*cosd(PLNG(3)); sind(90-TRND(3))*cosd(PLNG(3)); sind(PLNG(3))];
 
 % -- Final sigma 1,2,3 direction are in the columns of V
 % -- each iteration's version are in Vs..
